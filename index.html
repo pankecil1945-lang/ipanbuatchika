@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#050509">
+<title>Aku Sayang Kamu ❤️</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:#050509}
+body{font-family:Arial,Helvetica,sans-serif;color:#fff}
+#app{position:fixed;inset:0;overflow:hidden;background:#050509}
+canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+#rainCanvas{z-index:1}#mainCanvas{z-index:5}#heartCanvas{z-index:8;pointer-events:none}
+#centerText{position:absolute;inset:0;z-index:12;display:flex;align-items:center;justify-content:center;pointer-events:none;text-align:center}
+#word{opacity:0;color:#ff72ad;font-weight:900;font-size:clamp(48px,11vw,135px);letter-spacing:.035em;text-shadow:0 0 8px rgba(255,105,170,.8),0 0 24px rgba(255,105,170,.35)}
+#finalMessage{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .8s ease}
+.finalText{position:relative;z-index:2;color:#ff7bb3;font-weight:800;font-size:clamp(17px,3vw,34px);text-shadow:0 0 7px rgba(255,100,170,.9),0 0 18px rgba(255,100,170,.55);white-space:nowrap}
+.finalText .heartChar{color:#ff5fa3;margin:0 3px}
+
+/* FOTO + TALI PINK MEMBULAT, TERHUBUNG PER-SEGMENT */
+#photoLayer{position:absolute;inset:0;z-index:30;opacity:0;pointer-events:none;transition:opacity .6s ease}
+#photoRopeSvg{position:absolute;inset:0;width:100%;height:100%;overflow:visible;z-index:2;filter:drop-shadow(0 0 5px rgba(255,70,155,.5)) drop-shadow(0 3px 8px rgba(0,0,0,.38))}
+.connectedRope{fill:none;stroke:#ff5fa8;stroke-width:clamp(8px,.72vw,12px);stroke-linecap:round;stroke-linejoin:round}
+.connectedRopeHighlight{fill:none;stroke:rgba(255,205,226,.68);stroke-width:clamp(1.5px,.13vw,2.2px);stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+.ropeSegment{opacity:1}
+.ropeSegment path{stroke-dasharray:1;stroke-dashoffset:1}
+.ropeSegment path.reveal{transition:stroke-dashoffset .9s cubic-bezier(.22,.75,.2,1);stroke-dashoffset:0!important}
+.photoRig{position:absolute;left:0;top:0;width:0;height:0;transform:translate(-50%,-50%);transform-origin:center;z-index:3;will-change:transform}
+.photo{position:absolute;left:50%;top:50%;width:clamp(54px,8.5vw,105px);height:clamp(68px,11vw,132px);object-fit:cover;border:2px solid rgba(255,255,255,.95);border-radius:8px;background:#111;box-shadow:0 0 15px rgba(255,90,160,.38),0 8px 24px rgba(0,0,0,.55);opacity:0;transform:translate(-50%,-50%) scale(.15);transition:opacity .55s ease,transform .85s cubic-bezier(.2,.82,.2,1)}
+.photoRig.visible .photo{opacity:1;transform:translate(-50%,-50%) scale(1)}
+.photoRig::after{content:"";position:absolute;left:50%;top:50%;width:92%;height:82%;transform:translate(-50%,-50%);background:rgba(255,80,155,.13);filter:blur(18px);border-radius:50%;pointer-events:none;z-index:-1}
+.photoNode{position:absolute;left:50%;top:50%;width:9px;height:9px;border-radius:50%;transform:translate(-50%,-50%);background:#ff72ad;box-shadow:0 0 7px rgba(255,105,170,.9),0 2px 5px rgba(0,0,0,.5);opacity:0;transition:opacity .35s ease;z-index:4}
+.photoRig.visible .photoNode{opacity:1}
+
+#startScreen{position:absolute;inset:0;z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#050509;transition:opacity .8s ease}
+#startScreen h1{font-size:clamp(26px,6vw,58px);margin-bottom:10px}
+#startScreen p{font-size:14px;color:#aaa;margin-bottom:26px}
+#startButton{border:0;border-radius:999px;padding:14px 30px;color:#fff;background:#ff6fa9;font-weight:800;font-size:15px;cursor:pointer;box-shadow:0 0 28px rgba(255,105,165,.4)}
+#startButton:active{transform:scale(.97)}
+@media(max-width:600px){.finalText{font-size:17px}.photo{width:52px;height:68px}}
+</style>
+</head>
+<body>
+<div id="app">
+<canvas id="rainCanvas"></canvas><canvas id="mainCanvas"></canvas><canvas id="heartCanvas"></canvas>
+<div id="centerText"><div id="word"></div></div>
+<div id="finalMessage"><div class="finalText">chika ashila naysa</div></div>
+<div id="photoLayer"></div>
+<div id="startScreen"><h1>Buat Si Cantik Chika❤️</h1><p>pencet tombol start nya ya sayangggg</p><button id="startButton">start</button></div>
+</div>
+
+<script>
+const PHOTO_LIST=["foto1.jpeg","foto2.jpeg","foto3.jpeg","foto4.jpeg","foto5.jpeg","foto6.jpeg","foto7.jpeg","foto8.jpeg","foto9.jpeg","foto10.jpeg","foto11.jpeg","foto12.jpeg"];
+const NUMBER_HOLD=520,WORD_HOLD=700,FINAL_HOLD=4200,PHOTO_HOLD=5000;
+
+const rainCanvas=document.getElementById("rainCanvas"),mainCanvas=document.getElementById("mainCanvas"),heartCanvas=document.getElementById("heartCanvas");
+const rainCtx=rainCanvas.getContext("2d"),mainCtx=mainCanvas.getContext("2d"),heartCtx=heartCanvas.getContext("2d");
+let W=innerWidth,H=innerHeight,DPR=1,rain=[];
+
+function rand(a,b){return Math.random()*(b-a)+a}
+function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
+function resize(){W=innerWidth;H=innerHeight;DPR=Math.min(devicePixelRatio||1,2);[rainCanvas,mainCanvas,heartCanvas].forEach(c=>{c.width=Math.round(W*DPR);c.height=Math.round(H*DPR);c.style.width=W+"px";c.style.height=H+"px";c.getContext("2d").setTransform(DPR,0,0,DPR,0,0)});createRain()}
+function createRain(){rain=[];const cols=Math.max(28,Math.floor(W/11));for(let i=0;i<cols;i++)rain.push({x:i*11+rand(-2,2),y:rand(-H,H),speed:rand(.8,3),gap:rand(7,11),length:Math.floor(rand(5,20)),pink:Math.random()>.25,alpha:rand(.15,.65),phase:rand(0,Math.PI*2)})}
+const chars="01LOVEYOU♥+×·:|";
+function drawRain(){rainCtx.fillStyle="rgba(5,5,9,.18)";rainCtx.fillRect(0,0,W,H);for(const r of rain){r.y+=r.speed;r.phase+=.02;if(r.y>H+180){r.y=rand(-H,-30);r.speed=rand(.8,3)}for(let j=0;j<r.length;j++){const y=r.y-j*r.gap;if(y<-20||y>H+20)continue;rainCtx.globalAlpha=r.alpha*(1-j/r.length)*(.72+.28*Math.sin(r.phase+j*.9));rainCtx.fillStyle=r.pink?"#ff6fa9":"#fff";rainCtx.font="8px monospace";rainCtx.fillText(chars[Math.floor(Math.random()*chars.length)],r.x,y)}}rainCtx.globalAlpha=1}
+function rainLoop(){drawRain();requestAnimationFrame(rainLoop)}
+
+let particles=[];
+function getTextPoints(text,fontSize){const c=document.createElement("canvas"),ctx=c.getContext("2d");c.width=Math.max(1,Math.ceil(W));c.height=Math.max(1,Math.ceil(H));ctx.fillStyle="#fff";ctx.font=`900 ${fontSize}px Arial`;ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(text,W/2,H/2);const data=ctx.getImageData(0,0,W,H).data,points=[],gap=Math.max(4,Math.round(fontSize/35));for(let y=0;y<H;y+=gap)for(let x=0;x<W;x+=gap)if(data[(y*W+x)*4+3]>120)points.push({x,y});return points}
+function makeParticles(points,color){particles=[];if(!points.length)return;const max=Math.min(points.length,2600);for(let i=0;i<max;i++){const t=points[Math.floor(Math.random()*points.length)];particles.push({x:rand(0,W),y:rand(0,H),tx:t.x,ty:t.y,vx:0,vy:0,size:rand(1.8,4.8),color,alpha:0})}}
+function gatherParticles(duration){return new Promise(resolve=>{const start=performance.now();function frame(now){const p=Math.min((now-start)/duration,1),ease=1-Math.pow(1-p,3);mainCtx.clearRect(0,0,W,H);for(const q of particles){q.x+=(q.tx-q.x)*(.055+.045*ease);q.y+=(q.ty-q.y)*(.055+.045*ease);q.alpha=Math.min(1,p*2.2);mainCtx.globalAlpha=q.alpha;mainCtx.fillStyle=q.color;mainCtx.fillRect(Math.round(q.x),Math.round(q.y),q.size,q.size)}mainCtx.globalAlpha=1;if(p<1)requestAnimationFrame(frame);else resolve()}requestAnimationFrame(frame)})}
+function explodeParticles(duration){return new Promise(resolve=>{const start=performance.now();for(const q of particles){const a=Math.random()*Math.PI*2,s=rand(2.5,8);q.vx=Math.cos(a)*s;q.vy=Math.sin(a)*s}function frame(now){const p=Math.min((now-start)/duration,1);mainCtx.clearRect(0,0,W,H);for(const q of particles){q.x+=q.vx;q.y+=q.vy;q.vx*=.985;q.vy*=.985;mainCtx.globalAlpha=1-p;mainCtx.fillStyle=q.color;mainCtx.fillRect(Math.round(q.x),Math.round(q.y),q.size,q.size)}mainCtx.globalAlpha=1;if(p<1)requestAnimationFrame(frame);else{mainCtx.clearRect(0,0,W,H);resolve()}}requestAnimationFrame(frame)})}
+async function showNumber(n){makeParticles(getTextPoints(String(n),Math.min(W,H)*.40),"#fff");await gatherParticles(1200);await sleep(NUMBER_HOLD);await explodeParticles(850);await sleep(180)}
+async function showWord(w){makeParticles(getTextPoints(w.toUpperCase(),Math.min(W,H)*.18),"#ff6fa9");await gatherParticles(1250);await sleep(WORD_HOLD);await explodeParticles(900);await sleep(180)}
+
+let heartParticles=[];
+function heartXY(t,scale){const x=16*Math.pow(Math.sin(t),3),y=13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t);return{x:W/2+x*scale,y:H/2-y*scale}}
+function createHeartParticles(){heartParticles=[];const scale=Math.min(W,H)*.0185,outlineCount=Math.max(520,Math.min(850,Math.floor(W/1.15)));for(let i=0;i<outlineCount;i++){const p=heartXY(i/outlineCount*Math.PI*2,scale);heartParticles.push({x:rand(0,W),y:rand(0,H),tx:p.x+rand(-9,9),ty:p.y+rand(-9,9),size:rand(1.5,4.8),color:Math.random()>.08?"#ff69aa":"#fff",alpha:0})}for(let i=0;i<Math.floor(outlineCount*.45);i++){const p=heartXY(rand(0,Math.PI*2),scale),a=rand(0,Math.PI*2),d=rand(7,28);heartParticles.push({x:rand(0,W),y:rand(0,H),tx:p.x+Math.cos(a)*d,ty:p.y+Math.sin(a)*d,size:rand(1,3.2),color:Math.random()>.2?"#ff78b4":"#fff",alpha:0})}}
+function drawHeartFrame(){heartCtx.clearRect(0,0,W,H);for(const p of heartParticles){heartCtx.globalAlpha=p.alpha;heartCtx.fillStyle=p.color;heartCtx.beginPath();heartCtx.arc(p.x+Math.sin(performance.now()*.002+p.ty)*.45,p.y+Math.cos(performance.now()*.0017+p.tx)*.45,p.size,0,Math.PI*2);heartCtx.fill()}heartCtx.globalAlpha=1}
+function gatherHeart(duration){return new Promise(resolve=>{const start=performance.now();function frame(now){const p=Math.min((now-start)/duration,1),e=1-Math.pow(1-p,3);for(const q of heartParticles){q.x+=(q.tx-q.x)*(.045+.045*e);q.y+=(q.ty-q.y)*(.045+.045*e);q.alpha=Math.min(1,p*2.3)}drawHeartFrame();if(p<1)requestAnimationFrame(frame);else resolve()}requestAnimationFrame(frame)})}
+function animateHeartAlive(duration){return new Promise(resolve=>{const start=performance.now();function frame(now){const p=Math.min((now-start)/duration,1);for(const q of heartParticles){q.x+=(q.tx-q.x)*.015;q.y+=(q.ty-q.y)*.015}drawHeartFrame();if(p<1)requestAnimationFrame(frame);else resolve()}requestAnimationFrame(frame)})}
+function explodeHeart(duration){return new Promise(resolve=>{const start=performance.now();for(const q of heartParticles){const a=Math.atan2(q.y-H/2,q.x-W/2)+rand(-.65,.65),s=rand(1.5,6.5);q.vx=Math.cos(a)*s;q.vy=Math.sin(a)*s}function frame(now){const p=Math.min((now-start)/duration,1);heartCtx.clearRect(0,0,W,H);for(const q of heartParticles){q.x+=q.vx;q.y+=q.vy;q.vx*=.988;q.vy*=.988;heartCtx.globalAlpha=1-p;heartCtx.fillStyle=q.color;heartCtx.beginPath();heartCtx.arc(q.x,q.y,q.size,0,Math.PI*2);heartCtx.fill()}heartCtx.globalAlpha=1;if(p<1)requestAnimationFrame(frame);else{heartCtx.clearRect(0,0,W,H);resolve()}}requestAnimationFrame(frame)})}
+async function showFinalHeart(){createHeartParticles();await gatherHeart(1800);document.getElementById("finalMessage").style.opacity="1";await animateHeartAlive(4200);document.getElementById("finalMessage").style.opacity="0";await sleep(350);await explodeHeart(1300);await sleep(300)}
+
+function heartPhotoPositions(count){const result=[],scale=Math.min(W,H)*.017;for(let i=0;i<count;i++){const p=heartXY(i/count*Math.PI*2,scale);result.push({x:p.x,y:p.y})}return result}
+
+/* TALI LOVE: mengikuti kurva LOVE yang simetris dan benar-benar berbentuk hati */
+function perfectHeartPoint(t){
+ const scale=Math.min(W,H)*.0195;
+ // Kurva jantung parametrik klasik:
+ // x = 16 sin^3(t)
+ // y = 13 cos(t)-5 cos(2t)-2 cos(3t)-cos(4t)
+ const x=16*Math.pow(Math.sin(t),3);
+ const y=13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t);
+ return {
+   x:W/2+x*scale,
+   y:H/2-y*scale
+ };
+}
+
+function createSmoothHeartPoints(count){
+ const result=[];
+ // Offset supaya foto pertama berada di bagian atas kiri/cekungan love,
+ // lalu berjalan mengelilingi bentuk hati secara konsisten.
+ const offset=-Math.PI/2;
+ for(let i=0;i<count;i++){
+   const t=offset+(i/count)*Math.PI*2;
+   result.push(perfectHeartPoint(t));
+ }
+ return result;
+}
+
+function curvedSegmentPath(a,b,index,total){
+ // Jangan menambahkan sag/random curve ke tiap segmen.
+ // Control point dihitung dari tangent kurva heart sehingga seluruh tali
+ // mengikuti satu kurva love yang mulus.
+ const scale=Math.min(W,H)*.0195;
+ const offset=-Math.PI/2;
+ const t1=offset+(index-1)/total*Math.PI*2;
+ const t2=offset+index/total*Math.PI*2;
+
+ function tangent(t){
+   const dx=48*Math.pow(Math.sin(t),2)*Math.cos(t);
+   const dy=-13*Math.sin(t)+10*Math.sin(2*t)+6*Math.sin(3*t)+4*Math.sin(4*t);
+   const len=Math.hypot(dx,dy)||1;
+   return {x:dx/len,y:-dy/len};
+ }
+
+ const ta=tangent(t1);
+ const tb=tangent(t2);
+ const dx=b.x-a.x,dy=b.y-a.y;
+ const len=Math.hypot(dx,dy)||1;
+ const handle=Math.min(len*.42,Math.min(W,H)*.085);
+
+ const c1={x:a.x+ta.x*handle,y:a.y+ta.y*handle};
+ const c2={x:b.x-tb.x*handle,y:b.y-tb.y*handle};
+
+ return `M ${a.x} ${a.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${b.x} ${b.y}`;
+}
+
+function createRopeSegment(svg,d){
+ const ns="http://www.w3.org/2000/svg";
+ const group=document.createElementNS(ns,"g");
+ group.classList.add("ropeSegment");
+
+ const path=document.createElementNS(ns,"path");
+ path.setAttribute("d",d);
+ path.classList.add("connectedRope");
+
+ const highlight=document.createElementNS(ns,"path");
+ highlight.setAttribute("d",d);
+ highlight.classList.add("connectedRopeHighlight");
+
+ group.appendChild(path);
+ group.appendChild(highlight);
+ svg.appendChild(group);
+ return group;
+}
+
+function revealRopeSegment(segment){
+ return new Promise(resolve=>{
+   const path=segment.querySelector(".connectedRope");
+   const highlight=segment.querySelector(".connectedRopeHighlight");
+   if(!path){resolve();return}
+
+   const length=path.getTotalLength();
+   path.style.strokeDasharray=`${length} ${length}`;
+   path.style.strokeDashoffset=length;
+   highlight.style.strokeDasharray=`${length} ${length}`;
+   highlight.style.strokeDashoffset=length;
+
+   requestAnimationFrame(()=>{
+     requestAnimationFrame(()=>{
+       path.style.transition="stroke-dashoffset .9s cubic-bezier(.22,.75,.2,1)";
+       highlight.style.transition="stroke-dashoffset .9s cubic-bezier(.22,.75,.2,1)";
+       path.style.strokeDashoffset="0";
+       highlight.style.strokeDashoffset="0";
+     });
+   });
+
+   setTimeout(resolve,950);
+ });
+}
+
+function makePhotoRig(src,target,index){
+ const rig=document.createElement("div");
+ rig.className="photoRig";
+ rig.style.left=target.x+"px";
+ rig.style.top=target.y+"px";
+
+ const img=document.createElement("img");
+ img.className="photo";
+ img.src=src;
+ img.alt="";
+
+ const node=document.createElement("div");
+ node.className="photoNode";
+
+ rig.appendChild(img);
+ rig.appendChild(node);
+ return {rig,img,node};
+}
+
+let swingingRigs=[],swingRAF=null;
+function startPhotoSwing(){
+ if(swingRAF)cancelAnimationFrame(swingRAF);
+ const start=performance.now();
+
+ function frame(now){
+   const elapsed=(now-start)*.001;
+   for(const item of swingingRigs){
+     const t=elapsed*item.speed+item.phase;
+     const angle=item.baseAngle+
+       Math.sin(t)*item.amp+
+       Math.sin(t*.55+1.3)*item.amp*.20;
+     item.rig.style.transform=`translate(-50%,-50%) rotate(${angle}deg)`;
+   }
+   swingRAF=requestAnimationFrame(frame);
+ }
+ swingRAF=requestAnimationFrame(frame);
+}
+
+function stopPhotoSwing(){
+ if(swingRAF){cancelAnimationFrame(swingRAF);swingRAF=null}
+}
+
+
+function heartPathD(scaleFactor=1){
+ const n=240, scale=Math.min(W,H)*.0195*scaleFactor, offset=-Math.PI/2;
+ let d="";
+ for(let i=0;i<=n;i++){
+   const t=offset+(i/n)*Math.PI*2;
+   const x=16*Math.pow(Math.sin(t),3), y=13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t);
+   const px=W/2+x*scale, py=H/2-y*scale;
+   d+=(i===0?"M ":"L ")+px.toFixed(2)+" "+py.toFixed(2)+" ";
+ }
+ return d+"Z";
+}
+
+function createOutsideInHeartFill(svg){
+ const ns="http://www.w3.org/2000/svg";
+ const defs=document.createElementNS(ns,"defs");
+ const mask=document.createElementNS(ns,"mask");
+ const maskId="heartFillMask_"+Date.now();
+ mask.id=maskId;
+ mask.setAttribute("maskUnits","userSpaceOnUse");
+ mask.setAttribute("x","0"); mask.setAttribute("y","0");
+ mask.setAttribute("width",W); mask.setAttribute("height",H);
+
+ const outer=document.createElementNS(ns,"path");
+ outer.setAttribute("d",heartPathD(1));
+ outer.setAttribute("fill","white");
+ mask.appendChild(outer);
+
+ const inner=document.createElementNS(ns,"path");
+ inner.setAttribute("d",heartPathD(1));
+ inner.setAttribute("fill","black");
+ inner.style.transformBox="fill-box";
+ inner.style.transformOrigin="50% 50%";
+ mask.appendChild(inner);
+ defs.appendChild(mask);
+ svg.appendChild(defs);
+
+ const fill=document.createElementNS(ns,"path");
+ fill.setAttribute("d",heartPathD(1));
+ fill.setAttribute("fill","#ff5fa8");
+ fill.setAttribute("opacity",".98");
+ fill.setAttribute("mask",`url(#${maskId})`);
+ fill.style.filter="drop-shadow(0 0 18px rgba(255,70,155,.35))";
+ fill.style.pointerEvents="none";
+ svg.appendChild(fill);
+
+ return {inner,fill};
+}
+
+function revealHeartFillOutsideIn(inner,duration=1800){
+ return new Promise(resolve=>{
+   const start=performance.now();
+   function frame(now){
+     const p=Math.min((now-start)/duration,1);
+     const e=1-Math.pow(1-p,3);
+     const scale=Math.max(0,1-e);
+     inner.style.transform=`scale(${scale})`;
+     if(p<1) requestAnimationFrame(frame);
+     else resolve();
+   }
+   inner.style.transform="scale(1)";
+   requestAnimationFrame(frame);
+ });
+}
+
+async function showPhotos(){
+ const layer=document.getElementById("photoLayer");
+ layer.innerHTML="";
+ layer.style.opacity="1";
+
+ const photos=PHOTO_LIST.filter(Boolean);
+ if(!photos.length){await sleep(2500);layer.style.opacity="0";return}
+
+ const positions=createSmoothHeartPoints(photos.length);
+
+ const ns="http://www.w3.org/2000/svg";
+ const svg=document.createElementNS(ns,"svg");
+ svg.id="photoRopeSvg";
+ svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+ svg.setAttribute("preserveAspectRatio","none");
+ layer.appendChild(svg);
+
+ const elements=[];
+ swingingRigs=[];
+
+ for(let i=0;i<photos.length;i++){
+   const item=makePhotoRig(photos[i],positions[i],i);
+   layer.appendChild(item.rig);
+   elements.push(item);
+
+   swingingRigs.push({
+     rig:item.rig,
+     baseAngle:0,
+     amp:.65,
+     speed:rand(.42,.62),
+     phase:rand(0,Math.PI*2)
+   });
+ }
+
+ // Foto pertama.
+ elements[0].rig.classList.add("visible");
+ await sleep(850);
+
+ // Reveal satu segmen -> foto berikutnya.
+ for(let i=1;i<elements.length;i++){
+   const d=curvedSegmentPath(positions[i-1],positions[i],i,positions.length);
+   const segment=createRopeSegment(svg,d);
+   await revealRopeSegment(segment);
+   elements[i].rig.classList.add("visible");
+   await sleep(650);
+ }
+
+ // Segmen penutup mengikuti kurva parametrik yang sama,
+ // sehingga titik terakhir tersambung mulus ke titik pertama.
+ const closeD=curvedSegmentPath(
+   positions[positions.length-1],
+   positions[0],
+   positions.length,
+   positions.length
+ );
+ const closeSegment=createRopeSegment(svg,closeD);
+ await revealRopeSegment(closeSegment);
+
+ startPhotoSwing();
+ await sleep(PHOTO_HOLD);
+
+ for(let i=elements.length-1;i>=0;i--){
+   elements[i].rig.classList.remove("visible");
+   await sleep(80);
+ }
+
+ // Setelah semua foto hilang, tali love tetap terlihat.
+ // Lalu bagian dalam hati terisi pink dari sisi luar menuju tengah.
+ await sleep(500);
+ const fillState=createOutsideInHeartFill(svg);
+ await revealHeartFillOutsideIn(fillState.inner,1900);
+ await sleep(2200);
+
+ stopPhotoSwing();
+ layer.style.opacity="0";
+ await sleep(650);
+ layer.innerHTML="";
+}
+
+let playing=false;
+async function playSequence(){if(playing)return;playing=true;try{while(true){mainCtx.clearRect(0,0,W,H);heartCtx.clearRect(0,0,W,H);document.getElementById("finalMessage").style.opacity="0";await showNumber(3);await showNumber(2);await showNumber(1);await showWord("AKU");await showWord("SAYANG");await showWord("KAMU");await showFinalHeart();await showPhotos();await sleep(700)}}catch(err){console.error("Animasi error:",err)}finally{playing=false}}
+resize();rainLoop();
+document.getElementById("startButton").addEventListener("click",async()=>{const screen=document.getElementById("startScreen");screen.style.opacity="0";await sleep(800);screen.style.display="none";playSequence()});
+</script>
+</body>
+</html>
